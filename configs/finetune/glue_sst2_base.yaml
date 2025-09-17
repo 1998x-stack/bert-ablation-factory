@@ -1,6 +1,7 @@
 _base_: ../base.yaml
 
 TASK:
+  # 支持：glue_sst2, glue_mnli, glue_qnli, glue_qqp, glue_mrpc, glue_rte, glue_cola, glue_stsb
   name: glue_sst2
 
 MODEL:
@@ -13,8 +14,10 @@ DATA:
 TRAIN:
   per_device_batch_size: 32
   num_epochs: 3
-  eval_steps: 200
+  eval_steps: 200         # 每 N step 在 dev 上评估一次（可选）
   save_steps: 1000
+  RESTARTS: 3             # 多随机重启次数（取 dev 主指标最优的 run）
+  RESUME: true            # 断点自动续训
 
 OPTIM:
   lr: 5.0e-5
