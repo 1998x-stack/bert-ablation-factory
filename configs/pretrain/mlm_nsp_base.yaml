@@ -1,0 +1,18 @@
+# 论文默认：MLM + NSP；掩码 80/10/10；序列长度可后续提升到 512
+_base_: ../base.yaml
+
+ABLATION:
+  objective: mlm_nsp         # mlm_only | mlm_nsp | ltr
+  mask_strategy: 80_10_10    # 80% [MASK], 10% random, 10% keep
+  use_bilstm_head: false
+
+DATASET:
+  name: books_wiki_mixed     # 使用 bookcorpusopen + wikipedia 的混合示例
+  streaming: true
+  max_seq_len: 128
+
+TRAIN:
+  per_device_batch_size: 32
+  max_steps: 100000
+  eval_steps: 2000
+  save_steps: 2000

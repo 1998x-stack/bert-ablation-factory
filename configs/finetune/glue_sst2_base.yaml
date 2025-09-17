@@ -1,0 +1,22 @@
+_base_: ../base.yaml
+
+TASK:
+  name: glue_sst2
+
+MODEL:
+  name: bert-base-uncased
+  revision: main
+
+DATA:
+  max_seq_len: 128
+
+TRAIN:
+  per_device_batch_size: 32
+  num_epochs: 3
+  eval_steps: 200
+  save_steps: 1000
+
+OPTIM:
+  lr: 5.0e-5
+  weight_decay: 0.01
+  warmup_steps: 500

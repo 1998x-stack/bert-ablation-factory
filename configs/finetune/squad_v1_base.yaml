@@ -1,0 +1,24 @@
+_base_: ../base.yaml
+
+TASK:
+  name: squad_v1
+
+MODEL:
+  name: bert-base-uncased
+  revision: main
+
+DATA:
+  max_seq_len: 384
+  doc_stride: 128
+  max_query_len: 64
+
+TRAIN:
+  per_device_batch_size: 16
+  num_epochs: 3
+  eval_steps: 1000
+  save_steps: 1000
+
+OPTIM:
+  lr: 5.0e-5
+  weight_decay: 0.01
+  warmup_steps: 500

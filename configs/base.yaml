@@ -1,0 +1,31 @@
+SEED: 42
+OUTPUT_DIR: runs
+FP16: true
+LOG_EVERY: 50
+SAVE_EVERY: 1000
+EVAL_EVERY: 1000
+GRAD_ACCUM_STEPS: 1
+
+MODEL:
+  name: bert-base-uncased
+  revision: main
+
+DATA:
+  num_workers: 4
+  prefetch_factor: 2
+  pin_memory: true
+  max_seq_len: 128
+
+OPTIM:
+  lr: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+  warmup_steps: 10000
+  max_steps: 100000
+
+TRAIN:
+  per_device_batch_size: 32
+  max_steps: 100000
+  eval_steps: 1000
+  save_steps: 1000

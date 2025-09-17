@@ -1,0 +1,11 @@
+# 可选：单向 LTR（若 BertLMHeadModel 不可用将优雅降级为报错提示）
+_base_: ../base.yaml
+ABLATION:
+  objective: ltr
+  mask_strategy: none
+  use_bilstm_head: false
+
+DATASET:
+  name: books_wiki_mixed
+  streaming: true
+  max_seq_len: 128

@@ -1,0 +1,10 @@
+_base_: ../base.yaml
+ABLATION:
+  objective: mlm_only
+  mask_strategy: 80_10_10
+  use_bilstm_head: false
+
+DATASET:
+  name: books_wiki_mixed
+  streaming: true
+  max_seq_len: 128
