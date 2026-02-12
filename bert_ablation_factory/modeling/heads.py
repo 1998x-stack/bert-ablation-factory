@@ -5,7 +5,15 @@ from .bilstm import BiLSTMEncoder
 
 
 class ClassificationHead(nn.Module):
-    """[CLS] 分类头，可选 BiLSTM 过渡。"""
+    """
+    Classification head that takes the [CLS] token representation and applies 
+    a linear layer to produce logits for classification.
+    
+    Args:
+        hidden_size: Size of the hidden representations
+        num_labels: Number of classification labels
+        use_bilstm: Whether to apply BiLSTM encoder before classification
+    """
 
     def __init__(self, hidden_size: int, num_labels: int, use_bilstm: bool = False) -> None:
         super().__init__()
@@ -18,17 +26,34 @@ class ClassificationHead(nn.Module):
         self.classifier = nn.Linear(hidden_size, num_labels)
 
     def forward(self, hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the classification head.
+        
+        Args:
+            hidden_states: Hidden representations from the transformer (B, T, H)
+            attention_mask: Attention mask to indicate valid tokens (B, T)
+            
+        Returns:
+            Logits for classification (B, num_labels)
+        """
         # hidden_states: (B, T, H)
         x = hidden_states
         if self.use_bilstm:
             x = self.bridge(x, attention_mask)
-        cls = x[:, 0, :]
+        cls = x[:, 0, :]  # Take the [CLS] token representation
         cls = self.dropout(cls)
         return self.classifier(cls)
 
 
 class SpanHead(nn.Module):
-    """SQuAD 起止位置头，可选 BiLSTM 过渡。"""
+    """
+    Head for SQuAD-style question answering that predicts start and end positions.
+    Optionally applies BiLSTM encoder before prediction.
+    
+    Args:
+        hidden_size: Size of the hidden representations
+        use_bilstm: Whether to apply BiLSTM encoder before span prediction
+    """
 
     def __init__(self, hidden_size: int, use_bilstm: bool = False) -> None:
         super().__init__()
@@ -40,6 +65,17 @@ class SpanHead(nn.Module):
         self.qa_outputs = nn.Linear(hidden_size, 2)
 
     def forward(self, hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass of the span prediction head.
+        
+        Args:
+            hidden_states: Hidden representations from the transformer (B, T, H)
+            attention_mask: Attention mask to indicate valid tokens (B, T)
+            
+        Returns:
+            Tuple of (start_logits, end_logits) representing probability distributions
+            over start and end positions (B, T) each
+        """
         x = hidden_states
         if self.use_bilstm:
             x = self.bridge(x, attention_mask)

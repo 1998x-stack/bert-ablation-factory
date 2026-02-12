@@ -7,10 +7,18 @@ from .heads import ClassificationHead, SpanHead
 
 
 def build_pretrain_model(cfg: Dict[str, Any], ablation: str):
-    """根据消融目标构建预训练模型：
+    """
+    Build a pre-training model based on the ablation objective:
     - mlm_nsp: BertForPreTraining
     - mlm_only: BertForMaskedLM
-    - ltr: BertLMHeadModel（若不可用则报错提示）
+    - ltr: BertLMHeadModel (raises error if unavailable)
+    
+    Args:
+        cfg: Configuration dictionary
+        ablation: Type of ablation objective ('mlm_nsp', 'mlm_only', or 'ltr')
+        
+    Returns:
+        Tuple of (model, kind) where kind indicates the ablation type
     """
     name = cfg["MODEL"]["name"]
     if ablation == "mlm_nsp":
@@ -23,9 +31,9 @@ def build_pretrain_model(cfg: Dict[str, Any], ablation: str):
         try:
             from transformers import BertLMHeadModel
         except Exception as e:
-            raise RuntimeError("当前环境不支持 BertLMHeadModel，请升级 transformers 或改用 mlm_only/mlm_nsp") from e
+            raise RuntimeError("Current environment doesn't support BertLMHeadModel, please upgrade transformers or use mlm_only/mlm_nsp") from e
         model = BertLMHeadModel.from_pretrained(name)
-        # 确保 causal：某些版本需 is_decoder=True
+        # Ensure causal: some versions require is_decoder=True
         if hasattr(model.config, "is_decoder"):
             model.config.is_decoder = True
         kind = "ltr"
@@ -35,7 +43,18 @@ def build_pretrain_model(cfg: Dict[str, Any], ablation: str):
 
 
 def build_classification_model(num_labels: int, cfg: Dict[str, Any], use_bilstm: bool = False):
-    """分类模型：复用 BERT 主体 + 可选 BiLSTM 头（也可直接用 BertForSequenceClassification）。"""
+    """
+    Build classification model: reuse BERT backbone + optional BiLSTM head
+    (can also use BertForSequenceClassification directly).
+    
+    Args:
+        num_labels: Number of classification labels
+        cfg: Configuration dictionary
+        use_bilstm: Whether to use BiLSTM head instead of standard classification head
+        
+    Returns:
+        Tuple of (base model, classification head)
+    """
     name = cfg["MODEL"]["name"]
     base = BertModel.from_pretrained(name)
     head = ClassificationHead(base.config.hidden_size, num_labels, use_bilstm=use_bilstm)
@@ -43,7 +62,17 @@ def build_classification_model(num_labels: int, cfg: Dict[str, Any], use_bilstm:
 
 
 def build_qa_model(cfg: Dict[str, Any], use_bilstm: bool = False):
-    """SQuAD 模型：BERT 主体 + SpanHead（或直接用 BertForQuestionAnswering）。"""
+    """
+    Build SQuAD model: BERT backbone + SpanHead 
+    (can also use BertForQuestionAnswering directly).
+    
+    Args:
+        cfg: Configuration dictionary
+        use_bilstm: Whether to use BiLSTM head instead of standard span head
+        
+    Returns:
+        Tuple of (base model, span head)
+    """
     name = cfg["MODEL"]["name"]
     base = BertModel.from_pretrained(name)
     head = SpanHead(base.config.hidden_size, use_bilstm=use_bilstm)

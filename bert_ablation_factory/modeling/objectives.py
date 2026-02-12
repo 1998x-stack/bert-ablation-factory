@@ -5,7 +5,14 @@ from torch import nn
 
 
 class LossCombine(nn.Module):
-    """将不同预训练损失组合（例如 MLM + NSP）。"""
+    """
+    Combine different pre-training losses (e.g., MLM + NSP).
+    
+    Args:
+        use_mlm: Whether to include Masked Language Modeling loss
+        use_nsp: Whether to include Next Sentence Prediction loss
+        use_ltr: Whether to include Left-to-Right LM loss
+    """
 
     def __init__(self, use_mlm: bool = True, use_nsp: bool = False, use_ltr: bool = False) -> None:
         super().__init__()
@@ -15,6 +22,15 @@ class LossCombine(nn.Module):
         self.ce = nn.CrossEntropyLoss()
 
     def forward(self, outputs: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, float]]:
+        """
+        Compute the combined loss from different objectives.
+        
+        Args:
+            outputs: Dictionary containing different model outputs including logits and labels
+            
+        Returns:
+            Tuple of (total_loss, individual_losses_dict)
+        """
         losses = {}
         total = torch.tensor(0.0, device=outputs["hidden_states"].device)
         if self.use_mlm:

@@ -10,6 +10,16 @@ from .schedulers import build_warmup_linear
 
 
 def _to_device(batch: Dict[str, torch.Tensor], device: torch.device) -> Dict[str, torch.Tensor]:
+    """
+    Move a batch of tensors to the specified device.
+    
+    Args:
+        batch: Dictionary mapping keys to torch tensors
+        device: Target device to move tensors to
+        
+    Returns:
+        Dictionary with tensors moved to the target device
+    """
     return {k: v.to(device) for k, v in batch.items()}
 
 
@@ -22,7 +32,19 @@ def train_loop(
     out_dir: Path,
     max_steps: int,
 ) -> None:
-    """通用训练循环（支持 AMP + TB + 断点保存）。"""
+    """
+    Generic training loop that supports Automatic Mixed Precision (AMP), 
+    TensorBoard logging, and checkpoint saving.
+    
+    Args:
+        model: The PyTorch model to train
+        collate_loss_fn: Function that computes loss from a batch
+        train_loader: DataLoader for training data
+        valid_loader: Optional DataLoader for validation data
+        cfg: Configuration dictionary
+        out_dir: Directory to save checkpoints and logs
+        max_steps: Maximum number of training steps
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     optim = build_optimizer(model.parameters(), cfg)
@@ -68,6 +90,17 @@ def train_loop(
 def evaluate(model: torch.nn.Module, loader: DataLoader,
              collate_loss_fn: Callable[[Dict[str, torch.Tensor]], Dict[str, torch.Tensor] | torch.Tensor],
              device: torch.device, writer, step: int) -> None:
+    """
+    Evaluate the model on the validation dataset.
+    
+    Args:
+        model: The PyTorch model to evaluate
+        loader: DataLoader for validation data
+        collate_loss_fn: Function that computes loss from a batch
+        device: Device to run evaluation on
+        writer: TensorBoard writer for logging
+        step: Current training step for logging
+    """
     model.eval()
     losses = []
     for batch in loader:

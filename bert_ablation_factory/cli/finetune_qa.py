@@ -20,11 +20,15 @@ from ..utils.tb import create_tb_writer
 
 def parse_args():
     p = argparse.ArgumentParser("BERT Finetune - SQuAD v1.1")
-    p.add_argument("--cfg", type=str, required=True)
+    p.add_argument("--cfg", type=str, required=True, help="YAML configuration file")
     return p.parse_args()
 
 
 def main() -> None:
+    """
+    Main function to run BERT fine-tuning on SQuAD v1.1 question answering task.
+    Loads the SQuAD dataset, builds the model, and trains for multiple epochs.
+    """
     args = parse_args()
     cfg = load_yaml(args.cfg)
     base_path = cfg.get("_base_")
@@ -80,7 +84,7 @@ def main() -> None:
                 tb.add_scalar("train/loss", float(loss), step)
                 logger.info(f"epoch={epoch} step={step} loss={float(loss):.4f}")
 
-        # 验证
+        # Validation
         base.eval(); head.eval()
         preds_s, preds_e = [], []
         gts_s, gts_e = [], []

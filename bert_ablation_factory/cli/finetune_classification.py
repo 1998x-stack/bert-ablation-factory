@@ -1,7 +1,9 @@
 from __future__ import annotations
 import argparse
+import shutil
 from pathlib import Path
 from typing import Any, Dict, Tuple, List
+import numpy as np
 from loguru import logger
 import torch
 from torch.utils.data import DataLoader
@@ -20,9 +22,9 @@ from ..trainer.checkpoint import save_checkpoint, load_checkpoint, find_latest_c
 
 def parse_args():
     p = argparse.ArgumentParser("BERT Finetune - GLUE (Classification/Regression)")
-    p.add_argument("--cfg", type=str, required=True)
-    p.add_argument("--restarts", type=int, default=None, help="覆盖 YAML 的 RESTARTS")
-    p.add_argument("--resume", action="store_true", help="覆盖 YAML 的 RESUME=True")
+    p.add_argument("--cfg", type=str, required=True, help="YAML configuration file")
+    p.add_argument("--restarts", type=int, default=None, help="Override YAML RESTARTS setting")
+    p.add_argument("--resume", action="store_true", help="Override YAML RESUME=True setting")
     return p.parse_args()
 
 
@@ -40,6 +42,19 @@ def _evaluate_once(
     task: str,
     metric_obj,
 ) -> Dict[str, float]:
+    """
+    Evaluate the model on the given dataset.
+    
+    Args:
+        model: The model to evaluate
+        device: The device to run evaluation on
+        loader: DataLoader containing the evaluation dataset
+        task: Name of the task
+        metric_obj: Metric object for computing metrics
+        
+    Returns:
+        Dictionary of computed metrics
+    """
     model.eval()
     logits_all, labels_all = [], []
     with torch.no_grad():
@@ -48,7 +63,6 @@ def _evaluate_once(
             out = model(**batch)
             logits_all.append(out.logits.detach().cpu().numpy())
             labels_all.append(batch["labels"].detach().cpu().numpy())
-    import numpy as np
     logits = np.concatenate(logits_all, axis=0)
     labels = np.concatenate(labels_all, axis=0)
     return compute_glue_metrics(task, metric_obj, logits, labels)
@@ -60,7 +74,18 @@ def run_single_restart(
     run_dir: Path,
     seed: int,
 ) -> Tuple[float, Dict[str, float]]:
-    """单次重启训练并在 dev 上评估，返回 (主指标, 指标字典)。"""
+    """
+    Run a single restart of training and evaluate on dev set.
+    
+    Args:
+        cfg: Configuration dictionary
+        task_bundle: Bundle containing task information
+        run_dir: Directory to save run results
+        seed: Random seed for this run
+        
+    Returns:
+        Tuple of (main metric score, metrics dictionary)
+    """
     fix_seed(seed)
     tb = create_tb_writer(run_dir, "tb")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -114,7 +139,7 @@ def run_single_restart(
             if global_step % int(cfg.get("LOG_EVERY", 50)) == 0:
                 tb.add_scalar("train/loss", float(loss), global_step)
 
-            # 中途评估
+            # Periodic evaluation
             if global_step % int(cfg["TRAIN"].get("eval_steps", 0) or 0) == 0:
                 if isinstance(dev_loaders, dict):
                     all_metrics = {}
@@ -122,8 +147,8 @@ def run_single_restart(
                         res = _evaluate_once(model, device, ld, task, metric)
                         all_metrics.update({f"{k}/{kk}": vv for kk, vv in res.items()})
                     main = all_metrics.get(f"matched/{main_key}", None)
-                    if main is None:  # 若主指标不在 matched 上，就退化为任一可用的主指标
-                        # 例如如果你想以平均为主指标，可以自行改造
+                    if main is None:  # If main metric is not on matched, fall back to any available main metric
+                        # For example, if you want to use average as the main metric, you can modify accordingly
                         main = max([v for k, v in all_metrics.items() if k.endswith(main_key)])
                     score = float(main)
                     for k, v in all_metrics.items():
@@ -147,6 +172,10 @@ def run_single_restart(
 
 
 def main() -> None:
+    """
+    Main function to run BERT fine-tuning on GLUE classification/regression tasks.
+    Performs multiple random restarts to get reliable performance estimates.
+    """
     args = parse_args()
     cfg = load_yaml(args.cfg)
     base_path = cfg.get("_base_")
@@ -154,7 +183,7 @@ def main() -> None:
         base = load_yaml((Path(args.cfg).parent / base_path).resolve())
         cfg = merge_dict(base, {k: v for k, v in cfg.items() if k != "_base_"})
 
-    # 覆盖 YAML
+    # Override YAML settings if provided via command line
     if args.restarts is not None:
         cfg["TRAIN"]["RESTARTS"] = int(args.restarts)
     if args.resume:
@@ -162,13 +191,13 @@ def main() -> None:
 
     setup_logger()
 
-    # 构造任务
-    from ..tasks.glue import build_glue_task  # 保持显式依赖
+    # Build task
+    from ..tasks.glue import build_glue_task  # maintain explicit dependency
     tokenizer = build_tokenizer(cfg)
     bundle = build_glue_task(cfg, tokenizer)
     task = bundle["task_name"]
 
-    # 多随机重启（不同 seed）
+    # Multiple random restarts (different seeds)
     base_seed = int(cfg.get("SEED", 42))
     restarts = int(cfg["TRAIN"].get("RESTARTS", 1))
     root_out = Path(cfg.get("OUTPUT_DIR", "runs")) / f"{bundle['task_name']}"
@@ -184,8 +213,7 @@ def main() -> None:
             best_overall, best_detail, best_run = score, detail, r
 
     logger.info(f"[BEST] run={best_run} main={best_overall:.4f} metrics={best_detail}")
-    # 将最佳 run 的 best.pt 复制到根目录（供部署/评测）
-    import shutil
+# Copy the best run's best.pt to root directory (for deployment/evaluation)
     src = (root_out / f"run_{best_run:02d}" / "best.pt")
     if src.exists():
         shutil.copy2(src, root_out / "best.pt")
