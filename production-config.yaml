@@ -1,0 +1,159 @@
+# Production Configuration for BERT Ablation Factory
+# This configuration is optimized for production training runs
+
+_base_: configs/base.yaml
+
+# Production settings
+SEED: 42
+OUTPUT_DIR: /mnt/storage/bert-ablation-runs
+
+# Model Configuration
+MODEL:
+  name: bert-base-uncased
+  revision: main
+  # Use FP16 for faster training and lower memory usage
+  fp16: true
+
+# Data Configuration
+DATA:
+  max_seq_len: 512  # Full sequence length for production
+  num_workers: 8    # More workers for faster data loading
+  prefetch_factor: 4
+  pin_memory: true
+
+# Training Configuration - Production Optimized
+TRAIN:
+  per_device_batch_size: 32  # Adjust based on GPU memory
+  gradient_accumulation_steps: 2  # Effective batch size = 64
+  max_steps: 1000000  # 1M steps for full training
+  eval_steps: 5000    # Evaluate every 5K steps
+  save_steps: 10000   # Save checkpoint every 10K steps
+  logging_steps: 100  # Log every 100 steps
+  
+  # Multi-run configuration for robust results
+  RESTARTS: 5          # 5 random restarts for finetuning
+  RESUME: true         # Auto-resume from checkpoints
+  
+  # Early stopping
+  early_stopping: true
+  early_stopping_patience: 5  # Stop if no improvement for 5 evals
+
+# Optimization Configuration
+OPTIM:
+  lr: 1.0e-4                    # Standard BERT learning rate
+  weight_decay: 0.01            # Standard weight decay
+  betas: [0.9, 0.999]           # AdamW defaults
+  eps: 1.0e-8                   # AdamW epsilon
+  warmup_steps: 10000           # 10K warmup steps
+  max_steps: 1000000            # Total training steps
+  
+  # Learning rate scheduling
+  lr_scheduler: "linear_with_warmup"
+  min_lr_ratio: 0.1             # Final LR = 0.1 * initial LR
+
+# Memory Optimization
+MEMORY:
+  gradient_checkpointing: true  # Trade compute for memory
+  offload_optimizer: false      # Offload optimizer to CPU (if needed)
+  offload_parameters: false     # Offload parameters to CPU (if needed)
+
+# Logging and Monitoring
+LOGGING:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Weights & Biases integration
+  wandb:
+    enabled: true
+    project: "bert-ablation-factory"
+    entity: null  # Set to your wandb entity
+    tags: ["production", "bert", "ablation"]
+    
+  # TensorBoard
+  tensorboard:
+    enabled: true
+    log_dir: "${OUTPUT_DIR}/tensorboard"
+
+# Checkpoint Management
+CHECKPOINT:
+  save_total_limit: 5  # Keep only last 5 checkpoints
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  
+  # Distributed training
+  save_on_each_node: false
+
+# Distributed Training Configuration
+DISTRIBUTED:
+  enabled: false  # Set to true for multi-GPU training
+  backend: "nccl"  # or "gloo" for CPU
+  find_unused_parameters: false
+  
+  # DeepSpeed integration (optional)
+  deepspeed: null
+  # deepspeed: "configs/ds_config.json"
+
+# Ablation Configuration
+ABLATION:
+  objective: "mlm_nsp"      # mlm_only | mlm_nsp | ltr
+  mask_strategy: "80_10_10"  # 80% [MASK], 10% random, 10% keep
+  use_bilstm_head: false
+
+# Dataset Configuration
+DATASET:
+  name: "books_wiki_mixed"
+  streaming: true
+  max_seq_len: 512
+  
+  # Dataset mixing ratios (if using multiple datasets)
+  mixing_ratios:
+    bookcorpus: 0.5
+    wikipedia: 0.5
+
+# Validation Configuration
+VALIDATION:
+  enabled: true
+  eval_strategy: "steps"  # or "epoch"
+  eval_steps: 5000
+  
+  # Metrics to compute
+  metrics:
+    - "accuracy"
+    - "loss"
+    - "perplexity"
+
+# Hardware Configuration
+HARDWARE:
+  # GPU settings
+  gpu_ids: null  # null = use all available GPUs
+  mixed_precision: true  # Use FP16/BF16
+  
+  # CPU settings
+  num_threads: 8  # PyTorch CPU threads
+  
+  # Memory settings
+  max_memory_gb: null  # Per-GPU memory limit
+
+# Production Safety Settings
+SAFETY:
+  # Gradient clipping to prevent explosions
+  gradient_clipping: true
+  max_grad_norm: 1.0
+  
+  # Detection of NaN/Inf
+  detect_anomaly: false  # Set to true for debugging
+  
+  # Save on error
+  save_on_interrupt: true  # Save checkpoint on Ctrl+C
+
+# Resource Limits
+LIMITS:
+  # Maximum training time (hours)
+  max_time_hours: 168  # 1 week
+  
+  # Maximum number of checkpoints
+  max_checkpoints: 50
+  
+  # Disk space monitoring
+  min_free_disk_gb: 100

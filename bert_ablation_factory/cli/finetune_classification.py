@@ -17,19 +17,31 @@ from ..trainer.schedulers import build_warmup_linear
 from ..utils.tb import create_tb_writer
 from ..registry import TASKS
 from ..tasks.glue import build_glue_task, compute_glue_metrics, pick_main_score
-from ..trainer.checkpoint import save_checkpoint, load_checkpoint, find_latest_checkpoint
+from ..trainer.checkpoint import (
+    save_checkpoint,
+    load_checkpoint,
+    find_latest_checkpoint,
+)
 
 
 def parse_args():
     p = argparse.ArgumentParser("BERT Finetune - GLUE (Classification/Regression)")
     p.add_argument("--cfg", type=str, required=True, help="YAML configuration file")
-    p.add_argument("--restarts", type=int, default=None, help="Override YAML RESTARTS setting")
-    p.add_argument("--resume", action="store_true", help="Override YAML RESUME=True setting")
+    p.add_argument(
+        "--restarts", type=int, default=None, help="Override YAML RESTARTS setting"
+    )
+    p.add_argument(
+        "--resume", action="store_true", help="Override YAML RESUME=True setting"
+    )
     return p.parse_args()
 
 
-def _build_model(cfg: Dict[str, Any], num_labels: int, problem_type: str) -> BertForSequenceClassification:
-    model = BertForSequenceClassification.from_pretrained(cfg["MODEL"]["name"], num_labels=num_labels)
+def _build_model(
+    cfg: Dict[str, Any], num_labels: int, problem_type: str
+) -> BertForSequenceClassification:
+    model = BertForSequenceClassification.from_pretrained(
+        cfg["MODEL"]["name"], num_labels=num_labels
+    )
     if problem_type == "regression":
         model.config.problem_type = "regression"
     return model
@@ -44,14 +56,14 @@ def _evaluate_once(
 ) -> Dict[str, float]:
     """
     Evaluate the model on the given dataset.
-    
+
     Args:
         model: The model to evaluate
         device: The device to run evaluation on
         loader: DataLoader containing the evaluation dataset
         task: Name of the task
         metric_obj: Metric object for computing metrics
-        
+
     Returns:
         Dictionary of computed metrics
     """
@@ -76,13 +88,13 @@ def run_single_restart(
 ) -> Tuple[float, Dict[str, float]]:
     """
     Run a single restart of training and evaluate on dev set.
-    
+
     Args:
         cfg: Configuration dictionary
         task_bundle: Bundle containing task information
         run_dir: Directory to save run results
         seed: Random seed for this run
-        
+
     Returns:
         Tuple of (main metric score, metrics dictionary)
     """
@@ -97,7 +109,9 @@ def run_single_restart(
     metric = task_bundle["metric"]
     main_key = task_bundle["main_metric"]
 
-    model = _build_model(cfg, task_bundle["num_labels"], task_bundle["problem_type"]).to(device)
+    model = _build_model(
+        cfg, task_bundle["num_labels"], task_bundle["problem_type"]
+    ).to(device)
     optim = build_optimizer(model.parameters(), cfg)
 
     steps_per_epoch = (len(train_ds) // int(cfg["TRAIN"]["per_device_batch_size"])) + 1
@@ -107,7 +121,9 @@ def run_single_restart(
     scaler = torch.cuda.amp.GradScaler(enabled=bool(cfg.get("FP16", True)))
 
     # Loader
-    train_loader = DataLoader(train_ds, batch_size=int(cfg["TRAIN"]["per_device_batch_size"]), shuffle=True)
+    train_loader = DataLoader(
+        train_ds, batch_size=int(cfg["TRAIN"]["per_device_batch_size"]), shuffle=True
+    )
     dev_loaders: Dict[str, DataLoader] | DataLoader
     if isinstance(dev_ds, dict):
         dev_loaders = {k: DataLoader(v, batch_size=64) for k, v in dev_ds.items()}
@@ -120,7 +136,9 @@ def run_single_restart(
     want_resume = bool(cfg["TRAIN"].get("RESUME", False))
     if want_resume and latest is not None:
         logger.info(f"[RESUME] Found checkpoint: {latest}")
-        start_epoch, global_step = load_checkpoint(latest, model, optim, sched, scaler)
+        start_epoch, global_step = load_checkpoint(
+            latest, model, optim, sched, scaler, device
+        )
         logger.info(f"[RESUME] epoch={start_epoch}, step={global_step}")
 
     # 训练循环
@@ -134,7 +152,10 @@ def run_single_restart(
                 out = model(**batch)
                 loss = out.loss
             scaler.scale(loss).backward()
-            scaler.step(optim); scaler.update(); optim.zero_grad(set_to_none=True); sched.step()
+            scaler.step(optim)
+            scaler.update()
+            optim.zero_grad(set_to_none=True)
+            sched.step()
 
             if global_step % int(cfg.get("LOG_EVERY", 50)) == 0:
                 tb.add_scalar("train/loss", float(loss), global_step)
@@ -147,9 +168,13 @@ def run_single_restart(
                         res = _evaluate_once(model, device, ld, task, metric)
                         all_metrics.update({f"{k}/{kk}": vv for kk, vv in res.items()})
                     main = all_metrics.get(f"matched/{main_key}", None)
-                    if main is None:  # If main metric is not on matched, fall back to any available main metric
+                    if (
+                        main is None
+                    ):  # If main metric is not on matched, fall back to any available main metric
                         # For example, if you want to use average as the main metric, you can modify accordingly
-                        main = max([v for k, v in all_metrics.items() if k.endswith(main_key)])
+                        main = max(
+                            [v for k, v in all_metrics.items() if k.endswith(main_key)]
+                        )
                     score = float(main)
                     for k, v in all_metrics.items():
                         tb.add_scalar(f"dev/{k}", v, global_step)
@@ -160,9 +185,20 @@ def run_single_restart(
                         tb.add_scalar(f"dev/{k}", v, global_step)
 
                 if score > best_score:
-                    best_score, best_metrics = score, res if not isinstance(dev_loaders, dict) else all_metrics
+                    best_score, best_metrics = (
+                        score,
+                        res if not isinstance(dev_loaders, dict) else all_metrics,
+                    )
                     # 保存当前最优
-                    save_checkpoint(run_dir / "best.pt", model, optim, sched, scaler, epoch, global_step)
+                    save_checkpoint(
+                        run_dir / "best.pt",
+                        model,
+                        optim,
+                        sched,
+                        scaler,
+                        epoch,
+                        global_step,
+                    )
 
         # 每个 epoch 末尾保存断点
         ckpt_path = run_dir / f"ckpt_epoch_{epoch:04d}.pt"
@@ -192,7 +228,6 @@ def main() -> None:
     setup_logger()
 
     # Build task
-    from ..tasks.glue import build_glue_task  # maintain explicit dependency
     tokenizer = build_tokenizer(cfg)
     bundle = build_glue_task(cfg, tokenizer)
     task = bundle["task_name"]
@@ -213,8 +248,8 @@ def main() -> None:
             best_overall, best_detail, best_run = score, detail, r
 
     logger.info(f"[BEST] run={best_run} main={best_overall:.4f} metrics={best_detail}")
-# Copy the best run's best.pt to root directory (for deployment/evaluation)
-    src = (root_out / f"run_{best_run:02d}" / "best.pt")
+    # Copy the best run's best.pt to root directory (for deployment/evaluation)
+    src = root_out / f"run_{best_run:02d}" / "best.pt"
     if src.exists():
         shutil.copy2(src, root_out / "best.pt")
         logger.info(f"Saved overall best checkpoint to {root_out / 'best.pt'}")

@@ -9,14 +9,16 @@ from .optimizer import build_optimizer
 from .schedulers import build_warmup_linear
 
 
-def _to_device(batch: Dict[str, torch.Tensor], device: torch.device) -> Dict[str, torch.Tensor]:
+def _to_device(
+    batch: Dict[str, torch.Tensor], device: torch.device
+) -> Dict[str, torch.Tensor]:
     """
     Move a batch of tensors to the specified device.
-    
+
     Args:
         batch: Dictionary mapping keys to torch tensors
         device: Target device to move tensors to
-        
+
     Returns:
         Dictionary with tensors moved to the target device
     """
@@ -25,7 +27,9 @@ def _to_device(batch: Dict[str, torch.Tensor], device: torch.device) -> Dict[str
 
 def train_loop(
     model: torch.nn.Module,
-    collate_loss_fn: Callable[[Dict[str, torch.Tensor]], Dict[str, torch.Tensor] | torch.Tensor],
+    collate_loss_fn: Callable[
+        [Dict[str, torch.Tensor]], Dict[str, torch.Tensor] | torch.Tensor
+    ],
     train_loader: DataLoader,
     valid_loader: DataLoader | None,
     cfg: Dict[str, Any],
@@ -33,9 +37,9 @@ def train_loop(
     max_steps: int,
 ) -> None:
     """
-    Generic training loop that supports Automatic Mixed Precision (AMP), 
+    Generic training loop that supports Automatic Mixed Precision (AMP),
     TensorBoard logging, and checkpoint saving.
-    
+
     Args:
         model: The PyTorch model to train
         collate_loss_fn: Function that computes loss from a batch
@@ -73,7 +77,10 @@ def train_loop(
                 logger.info(f"step={step} loss={float(loss):.4f}")
                 writer.add_scalar("train/loss", float(loss), step)
 
-            if valid_loader is not None and step % int(cfg.get("EVAL_EVERY", 1000)) == 0:
+            if (
+                valid_loader is not None
+                and step % int(cfg.get("EVAL_EVERY", 1000)) == 0
+            ):
                 evaluate(model, valid_loader, collate_loss_fn, device, writer, step)
 
             if step % int(cfg.get("SAVE_EVERY", 1000)) == 0:
@@ -87,12 +94,19 @@ def train_loop(
 
 
 @torch.no_grad()
-def evaluate(model: torch.nn.Module, loader: DataLoader,
-             collate_loss_fn: Callable[[Dict[str, torch.Tensor]], Dict[str, torch.Tensor] | torch.Tensor],
-             device: torch.device, writer, step: int) -> None:
+def evaluate(
+    model: torch.nn.Module,
+    loader: DataLoader,
+    collate_loss_fn: Callable[
+        [Dict[str, torch.Tensor]], Dict[str, torch.Tensor] | torch.Tensor
+    ],
+    device: torch.device,
+    writer,
+    step: int,
+) -> None:
     """
     Evaluate the model on the validation dataset.
-    
+
     Args:
         model: The PyTorch model to evaluate
         loader: DataLoader for validation data
@@ -102,6 +116,7 @@ def evaluate(model: torch.nn.Module, loader: DataLoader,
         step: Current training step for logging
     """
     model.eval()
+    model.to(device)  # Ensure model is on the correct device
     losses = []
     for batch in loader:
         batch = {k: v.to(device) for k, v in batch.items()}

@@ -13,7 +13,9 @@ def atomic_save(state: Dict[str, Any], path: Path) -> None:
     tmp.replace(path)
 
 
-def find_latest_checkpoint(dir_: Path, prefix: str = "ckpt_epoch_", suffix: str = ".pt") -> Optional[Path]:
+def find_latest_checkpoint(
+    dir_: Path, prefix: str = "ckpt_epoch_", suffix: str = ".pt"
+) -> Optional[Path]:
     """在目录下寻找最近的断点文件，命名如 ckpt_epoch_0003.pt。"""
     if not dir_.exists():
         return None
@@ -60,10 +62,28 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer,
     scheduler: Any,
     scaler: Any,
+    device: torch.device | None = None,
 ) -> Tuple[int, int]:
-    """加载训练状态，返回 (epoch, step) 以便恢复循环指针。"""
-    state = torch.load(path, map_location="cpu")
+    """
+    加载训练状态，返回 (epoch, step) 以便恢复循环指针。
+
+    Args:
+        path: Path to checkpoint file
+        model: Model to load state into
+        optimizer: Optimizer to load state into
+        scheduler: Scheduler to load state into
+        scaler: Gradient scaler to load state into
+        device: Device to load model onto. If None, uses CPU
+
+    Returns:
+        Tuple of (epoch, step) from checkpoint
+    """
+    if device is None:
+        device = torch.device("cpu")
+
+    state = torch.load(path, map_location=device)
     model.load_state_dict(state["model"])
+    model.to(device)  # Ensure model is on the correct device
     optimizer.load_state_dict(state["optimizer"])
     try:
         scheduler.load_state_dict(state.get("scheduler", {}))
