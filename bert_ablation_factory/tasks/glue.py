@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Any, Tuple, Optional, List
-from datasets import load_dataset
+from datasets import Dataset, DatasetDict, load_dataset
 from transformers import PreTrainedTokenizerBase
 import evaluate
 import numpy as np
@@ -20,6 +20,29 @@ MAIN_METRIC = {
     "cola": "matthews_correlation",
     "stsb": "pearson",
 }
+
+
+def _synthetic_glue(task: str, rows: int) -> DatasetDict:
+    if task != "sst2":
+        raise ValueError(f"No synthetic generator for GLUE task '{task}'")
+    sample = {"sentence": "a tiny synthetic example for smoke tests", "label": 0}
+    data = {k: [v] * rows for k, v in sample.items()}
+    return DatasetDict({"train": Dataset.from_dict(data),
+                        "validation": Dataset.from_dict(data)})
+
+
+def _load_glue(cfg, task: str):
+    source = (cfg.get("DATA") or {}).get("source", "hf")
+    if source == "hf":
+        return load_dataset("glue", task)
+    if source == "json":
+        files = {"train": cfg["DATA"]["train_path"],
+                 "validation": cfg["DATA"]["dev_path"]}
+        return load_dataset("json", data_files=files)
+    if source == "synthetic":
+        n = int((cfg.get("DATA") or {}).get("n", 4))
+        return _synthetic_glue(task, n)
+    raise ValueError(f"Unknown DATA.source: {source}")
 
 
 def _sentence_keys(task: str) -> Tuple[str, Optional[str]]:
@@ -109,7 +132,7 @@ def build_glue_task(cfg: Dict[str, Any], tokenizer: PreTrainedTokenizerBase):
     assert full.startswith("glue_"), "TASK.name 必须以 glue_ 开头"
     task = full.split("_", 1)[1]
 
-    raw = load_dataset("glue", task)
+    raw = _load_glue(cfg, task)
     max_len = int(cfg["DATA"]["max_seq_len"])
     fn = _preprocess_builder(tokenizer, task, max_len)
 
