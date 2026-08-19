@@ -43,12 +43,7 @@ def main() -> None:
     tb = create_tb_writer(out_dir, "tb")
 
     tokenizer = build_tokenizer(cfg)
-    train_ds, dev_ds = load_squad_v1(
-        tokenizer,
-        int(cfg["DATA"]["max_seq_len"]),
-        int(cfg["DATA"]["doc_stride"]),
-        int(cfg["DATA"]["max_query_len"]),
-    )
+    train_ds, dev_ds = load_squad_v1(tokenizer, cfg)
 
     base, head = build_qa_model(cfg, use_bilstm=bool(cfg["ABLATION"].get("use_bilstm_head", False)))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

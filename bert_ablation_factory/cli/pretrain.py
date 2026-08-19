@@ -22,8 +22,12 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def build_books_wiki_stream(tokenizer, max_len: int):
+def build_books_wiki_stream(cfg, tokenizer, max_len: int):
     """Stream combined bookcorpusopen + wikipedia data to construct NSP sentence pairs."""
+    source = (cfg.get("DATA") or {}).get("source", "hf")
+    if source == "synthetic":
+        n = int((cfg.get("DATA") or {}).get("n", 8))
+        return _synthetic_stream(tokenizer, max_len, n)
     ds1 = load_dataset("bookcorpusopen", split="train", streaming=True)
     ds2 = load_dataset("wikipedia", "20220301.en", split="train", streaming=True)
     mixed = interleave_datasets([ds1, ds2], probabilities=[0.5, 0.5], seed=42)
@@ -64,6 +68,18 @@ def build_books_wiki_stream(tokenizer, max_len: int):
     return gen_examples()
 
 
+def _synthetic_stream(tokenizer, max_len, n):
+    rng = random.Random(0)
+    for _ in range(n):
+        a = " ".join(f"w{rng.randrange(5, 1000)}" for _ in range(max_len))
+        b = " ".join(f"w{rng.randrange(5, 1000)}" for _ in range(max_len))
+        enc = tokenizer(a, b, truncation=True, max_length=max_len,
+                        padding="max_length", return_token_type_ids=True,
+                        return_attention_mask=True)
+        enc["next_sentence_label"] = 0
+        yield enc
+
+
 def main() -> None:
     """
     Main function to run BERT pretraining with configurable ablations.
@@ -90,7 +106,7 @@ def main() -> None:
 
     # Data processing
     max_len = int(cfg["DATA"].get("max_seq_len") or cfg["DATASET"].get("max_seq_len", 128))
-    stream = build_books_wiki_stream(tokenizer, max_len)
+    stream = build_books_wiki_stream(cfg, tokenizer, max_len)
     
     # Convert stream to finite iterable for DataLoader
     from itertools import islice
