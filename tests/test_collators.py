@@ -5,6 +5,7 @@ from bert_ablation_factory.data.collators import (
 
 
 def test_mlm_masks_valid_not_pad():
+    torch.manual_seed(0)
     c = MLMOnlyCollator(MLMConfig(mask_strategy="100_mask", pad_token_id=0, mask_token_id=4))
     n = 50
     ids = list(range(1, 1 + n))

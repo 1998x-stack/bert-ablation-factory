@@ -16,7 +16,7 @@ def build_tokenizer(cfg: Dict[str, Any]) -> BertTokenizer:
         A configured ``BertTokenizer``.
 
     Raises:
-        ValueError: If ``MODEL.name`` is missing, not a string, or empty.
+        ValueError: If ``MODEL.name`` is missing, empty, or not a string/os.PathLike.
         OSError: If the tokenizer cannot be built from the given name/path.
     """
     model_cfg = cfg.get("MODEL")

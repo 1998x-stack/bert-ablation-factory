@@ -36,8 +36,14 @@ def _load_glue(cfg, task: str):
     if source == "hf":
         return load_dataset("glue", task)
     if source == "json":
-        files = {"train": cfg["DATA"]["train_path"],
-                 "validation": cfg["DATA"]["dev_path"]}
+        data_cfg = cfg.get("DATA") or {}
+        train_path = data_cfg.get("train_path")
+        dev_path = data_cfg.get("dev_path")
+        if not train_path or not dev_path:
+            raise ValueError(
+                "DATA.source='json' requires DATA.train_path and DATA.dev_path"
+            )
+        files = {"train": train_path, "validation": dev_path}
         return load_dataset("json", data_files=files)
     if source == "synthetic":
         n = int((cfg.get("DATA") or {}).get("n", 4))
