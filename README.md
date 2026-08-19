@@ -77,7 +77,7 @@ pip install -r requirements.txt
 python -m bert_ablation_factory.cli.pretrain --cfg configs/pretrain/mlm_nsp_base.yaml
 
 # Pretrain with MLM-only (no NSP)
-python -m bert_ablation_factory.cli.pretrain --cfg configs/pretrain/mlm_only_base.yaml
+python -m bert_ablation_factory.cli.pretrain --cfg configs/pretrain/mlm_no_nsp_base.yaml
 
 # Pretrain with Left-to-Right objective
 python -m bert_ablation_factory.cli.pretrain --cfg configs/pretrain/ltr_no_nsp_base.yaml
@@ -118,6 +118,14 @@ The framework uses YAML configuration files for maximum flexibility. Here's what
 - **Evaluation Metrics**: Task-specific metrics like F1, EM, accuracy
 - **Hyperparameters**: Learning rates, epochs, warmup steps, etc.
 
+### DATA.source (dataset injection)
+
+Each data loader reads `DATA.source`:
+
+- `hf` (default): download the standard dataset from HuggingFace (`glue`, `squad`, or the bookcorpusopen+wikipedia stream for pretraining).
+- `json`: load local JSON/JSONL files given by `DATA.train_path` and `DATA.dev_path`.
+- `synthetic` (test convenience): generate a tiny in-memory dataset — used by the offline unit/CLI smoke tests.
+
 ## Project Structure
 
 ```
@@ -133,6 +141,7 @@ bert-ablation-factory/
 │   │   ├── objectives.py         # Training objectives
 │   │   └── bilstm.py             # BiLSTM components
 │   ├── data/                      # Data processing
+│   │   ├── tokenization.py       # Tokenizer builders
 │   │   ├── collators.py          # Batch collation
 │   │   ├── glue.py               # GLUE dataset utilities
 │   │   └── squad.py              # SQuAD dataset utilities
@@ -149,8 +158,19 @@ bert-ablation-factory/
 │   ├── base.yaml                 # Base configuration
 │   ├── pretrain/                 # Pretraining configs
 │   └── finetune/                 # Fine-tuning configs
-├── tests/                        # Unit tests
+├── tests/                        # Offline unit + CLI smoke tests (conftest, gen, per-module)
 └── README.md                     # This file
+```
+
+## Testing
+
+The suite runs fully offline — no model, tokenizer, or dataset downloads — using
+tiny synthetic data and tiny random-weight BERT checkpoints.
+
+```bash
+python -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest
 ```
 
 ## Learning Resources
@@ -182,7 +202,7 @@ Compare MLM+NSP vs MLM-only on downstream performance:
 python -m bert_ablation_factory.cli.pretrain --cfg configs/pretrain/mlm_nsp_base.yaml
 
 # Train with MLM only
-python -m bert_ablation_factory.cli.pretrain --cfg configs/pretrain/mlm_only_base.yaml
+python -m bert_ablation_factory.cli.pretrain --cfg configs/pretrain/mlm_no_nsp_base.yaml
 
 # Fine-tune both models on the same task
 python -m bert_ablation_factory.cli.finetune_classification --cfg configs/finetune/glue_sst2_base.yaml
