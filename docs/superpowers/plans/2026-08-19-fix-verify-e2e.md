@@ -33,115 +33,9 @@
 
 [All CLIs already `from ..data.tokenization import build_tokenizer`, so creating this unblocks every entry point.]
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Create minimal scaffolding `tests/__init__.py` + `tests/gen.py`**
 
-Create `tests/test_tokenization.py`:
-
-```python
-import pytest
-
-
-@pytest.fixture(scope="module")
-def tiny_tok_dir(tmp_path_factory):
-    from tests.gen import make_tokenizer
-    return make_tokenizer(tmp_path_factory.mktemp("tok"))
-
-
-def test_build_tokenizer_returns_bert_tokenizer(tiny_tok_dir):
-    from bert_ablation_factory.data.tokenization import build_tokenizer
-    tok = build_tokenizer({"MODEL": {"name": tiny_tok_dir}})
-    assert tok.mask_token_id == 4
-    assert tok.pad_token_id == 0
-    assert tok.cls_token_id == 2
-    assert tok.vocab_size == 1000
-
-
-def test_build_tokenizer_missing_name_raises():
-    from bert_ablation_factory.data.tokenization import build_tokenizer
-    with pytest.raises(ValueError):
-        build_tokenizer({"MODEL": {}})
-
-
-def test_build_tokenizer_bad_name_raises(tmp_path):
-    from bert_ablation_factory.data.tokenization import build_tokenizer
-    with pytest.raises(OSError):
-        build_tokenizer({"MODEL": {"name": str(tmp_path / "does-not-exist")}})
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `.venv/bin/python -m pytest tests/test_tokenization.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'bert_ablation_factory.data.tokenization'`
-
-- [ ] **Step 3: Implement `data/tokenization.py`**
-
-```python
-from __future__ import annotations
-from typing import Any, Dict
-
-from transformers import BertTokenizer
-
-
-def build_tokenizer(cfg: Dict[str, Any]) -> BertTokenizer:
-    """Build a BERT tokenizer for the model named in ``cfg["MODEL"]["name"]``.
-
-    Args:
-        cfg: Configuration dict containing ``MODEL.name`` (a HuggingFace id or
-            a local dir holding a saved tokenizer/vocab).
-
-    Returns:
-        A configured ``BertTokenizer``.
-
-    Raises:
-        ValueError: If ``MODEL.name`` is missing, not a string, or empty.
-        OSError: If the tokenizer cannot be built from the given name/path.
-    """
-    model_cfg = cfg.get("MODEL")
-    if not isinstance(model_cfg, dict):
-        raise ValueError("Config must contain a MODEL section")
-    name = model_cfg.get("name")
-    if not isinstance(name, str) or not name:
-        raise ValueError("MODEL.name must be a non-empty string")
-
-    try:
-        return BertTokenizer.from_pretrained(name)
-    except OSError as e:
-        raise OSError(f"Failed to load tokenizer from '{name}': {e}") from e
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `.venv/bin/python -m pytest tests/test_tokenization.py -v`
-Expected: `3 passed`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-cd /Users/x/Desktop/1998x-stack/00-仓库/04-深度学习与CV/从零实现与消融/bert-ablation-factory
-git add bert_ablation_factory/data/tokenization.py tests/test_tokenization.py
-git commit -m "feat(data): add build_tokenizer to fix broken tokenization import"
-```
-
----
-
-### Task 2: Test scaffolding — `tests/__init__.py`, `tests/gen.py`, `tests/conftest.py`
-
-**Files:**
-- Create: `tests/__init__.py` (empty)
-- Create: `tests/gen.py`
-- Create: `tests/conftest.py`
-- Create: `tests/test_fixtures.py`
-
-**Interfaces:**
-- Produces (consumed by all later tasks):
-  - `tests.gen.make_config(**kw) -> BertConfig` (tiny config, constants above).
-  - `tests.gen.make_tokenizer(path) -> BertTokenizer` (writes `vocab.txt` + saves tokenizer into `path`, returns it).
-  - `tests.conftest.tiny_model` fixture → `dict[str, str]` keys `pretrain|masked|lmhead|clscls|bert` → local dirs containing saved tiny model + tokenizer (so `from_pretrained(dir)` works for both, offline).
-  - `tests.conftest.tiny_tokenizer` fixture → offline `BertTokenizer`.
-  - `tests.conftest.write_yaml(path, dict) -> Path`.
-  - `tests.conftest.PROJECT_ROOT` (used by CLI subprocess tests).
-
-- [ ] **Step 1: Create `tests/gen.py`**
+Create empty `tests/__init__.py`, and `tests/gen.py` (shared offline builders used by this task's test and all later tasks):
 
 ```python
 """Shared offline builders for the test suite: tiny vocab, tokenizer, and BERT config."""
@@ -182,7 +76,115 @@ def make_tokenizer(base: Path) -> BertTokenizer:
     return tok
 ```
 
-- [ ] **Step 2: Create `tests/conftest.py`**
+- [ ] **Step 2: Write the failing test**
+
+Create `tests/test_tokenization.py`:
+
+```python
+import pytest
+
+
+@pytest.fixture(scope="module")
+def tiny_tok_dir(tmp_path_factory):
+    from tests.gen import make_tokenizer
+    return make_tokenizer(tmp_path_factory.mktemp("tok"))
+
+
+def test_build_tokenizer_returns_bert_tokenizer(tiny_tok_dir):
+    from bert_ablation_factory.data.tokenization import build_tokenizer
+    tok = build_tokenizer({"MODEL": {"name": tiny_tok_dir}})
+    assert tok.mask_token_id == 4
+    assert tok.pad_token_id == 0
+    assert tok.cls_token_id == 2
+    assert tok.vocab_size == 1000
+
+
+def test_build_tokenizer_missing_name_raises():
+    from bert_ablation_factory.data.tokenization import build_tokenizer
+    with pytest.raises(ValueError):
+        build_tokenizer({"MODEL": {}})
+
+
+def test_build_tokenizer_bad_name_raises(tmp_path):
+    from bert_ablation_factory.data.tokenization import build_tokenizer
+    with pytest.raises(OSError):
+        build_tokenizer({"MODEL": {"name": str(tmp_path / "does-not-exist")}})
+```
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+Run: `.venv/bin/python -m pytest tests/test_tokenization.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'bert_ablation_factory.data.tokenization'`
+
+- [ ] **Step 4: Implement `data/tokenization.py`**
+
+```python
+from __future__ import annotations
+from typing import Any, Dict
+
+from transformers import BertTokenizer
+
+
+def build_tokenizer(cfg: Dict[str, Any]) -> BertTokenizer:
+    """Build a BERT tokenizer for the model named in ``cfg["MODEL"]["name"]``.
+
+    Args:
+        cfg: Configuration dict containing ``MODEL.name`` (a HuggingFace id or
+            a local dir holding a saved tokenizer/vocab).
+
+    Returns:
+        A configured ``BertTokenizer``.
+
+    Raises:
+        ValueError: If ``MODEL.name`` is missing, not a string, or empty.
+        OSError: If the tokenizer cannot be built from the given name/path.
+    """
+    model_cfg = cfg.get("MODEL")
+    if not isinstance(model_cfg, dict):
+        raise ValueError("Config must contain a MODEL section")
+    name = model_cfg.get("name")
+    if not isinstance(name, str) or not name:
+        raise ValueError("MODEL.name must be a non-empty string")
+
+    try:
+        return BertTokenizer.from_pretrained(name)
+    except OSError as e:
+        raise OSError(f"Failed to load tokenizer from '{name}': {e}") from e
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `.venv/bin/python -m pytest tests/test_tokenization.py -v`
+Expected: `3 passed`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /Users/x/Desktop/1998x-stack/00-仓库/04-深度学习与CV/从零实现与消融/bert-ablation-factory
+git add bert_ablation_factory/data/tokenization.py tests/__init__.py tests/gen.py tests/test_tokenization.py
+git commit -m "feat(data): add build_tokenizer to fix broken tokenization import"
+```
+
+---
+
+### Task 2: Test scaffolding — `tests/conftest.py` + fixtures
+
+**Files:** (created in Task 1 already: `tests/__init__.py`, `tests/gen.py`)
+- Create: `tests/conftest.py`
+- Create: `tests/test_fixtures.py`
+
+**Interfaces:**
+- Produces (consumed by all later tasks):
+  - `tests.gen.make_config(**kw) -> BertConfig` (tiny config, constants above).
+  - `tests.gen.make_tokenizer(path) -> BertTokenizer` (writes `vocab.txt` + saves tokenizer into `path`, returns it).
+  - `tests.conftest.tiny_model` fixture → `dict[str, str]` keys `pretrain|masked|lmhead|cls|bert` → local dirs containing saved tiny model + tokenizer (so `from_pretrained(dir)` works for both, offline).
+  - `tests.conftest.tiny_tokenizer` fixture → offline `BertTokenizer`.
+  - `tests.conftest.write_yaml(path, dict) -> Path`.
+  - `tests.conftest.PROJECT_ROOT` (used by CLI subprocess tests).
+
+- [ ] **Step 1: Create `tests/conftest.py`**
+
+(`tests/gen.py` with `make_config`/`make_tokenizer` and empty `tests/__init__.py` were created in Task 1 — do not recreate them.)
 
 ```python
 import sys
@@ -273,7 +275,7 @@ Expected: `2 passed` — fully offline.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/__init__.py tests/gen.py tests/conftest.py tests/test_fixtures.py
+git add tests/conftest.py tests/test_fixtures.py
 git commit -m "test: add offline tiny-model/tokenizer fixtures and config helpers"
 ```
 
@@ -422,10 +424,10 @@ Expected: FAIL — either signature mismatch (needs cfg) or `load_dataset("squad
 - [ ] **Step 3: Refactor `data/squad.py`**
 
 ```python
-from datasets import Dataset, Dataset, DatasetDict, load_dataset
+from datasets import Dataset, DatasetDict, load_dataset
 from typing import Any, Dict, Tuple
 
-def _synthetic_squads(n: int):
+def _build_synthetic_squad(n: int):
     rows = {
         "question": ["What is the capital of France?"] * n,
         "context": ["The capital of France is Paris. It is a large city."] * n,
@@ -831,17 +833,6 @@ def _write_cfg(path: Path, data: dict) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     return path
-
-
-def _base_cfg(out_dir):
-    return {
-        "SEED": 1,
-        "OUTPUT_DIR": str(out_dir),
-        "FP16": False,
-        "LOG_EVERY": 1,
-        "OPTIM": {"lr": 1e-4, "weight_decay": 0.0, "betas": [0.9, 0.999],
-                  "eps": 1e-8, "warmup_steps": 0},
-    }
 ```
 
 - [ ] **Step 2: Pretrain CLI test (all three ablations)**
@@ -851,7 +842,9 @@ The three tests share `_pretrain_cfg(out, model_dir, objective)`:
 ```python
 def _pretrain_cfg(out, model_dir, objective):
     return {
-        "SEED": 1, "OUTPUT_DIR": str(out), "FP16": False, "LOG_EVERY": 1,
+        "SEED": 1, "OUTPUT_DIR": str(out), "FP16": False,
+        "LOG_EVERY": 1, "SAVE_EVERY": 1, "EVAL_EVERY": 100000,
+        "GRAD_ACCUM_STEPS": 1,
         "MODEL": {"name": model_dir},
         "DATA": {"source": "synthetic", "n": 8, "max_seq_len": 16},
         "ABLATION": {"objective": objective,
@@ -920,8 +913,8 @@ def test_finetune_qa(tmp_path, tiny_model):
         "SEED": 1, "OUTPUT_DIR": str(out), "FP16": False, "LOG_EVERY": 1,
         "MODEL": {"name": tiny_model["bert"]},
         "TASK": {"name": "squad"},
-        "DATA": {"source": "synthetic", "n": 4, "max_seq_len": 16,
-                 "doc_stride": 8, "max_query_len": 8},
+        "DATA": {"source": "synthetic", "n": 4, "max_seq_len": 64,
+                 "doc_stride": 16, "max_query_len": 16},
         "ABLATION": {"use_bilstm_head": False},
         "OPTIM": {"lr": 5e-5, "weight_decay": 0.0, "betas": [0.9, 0.999],
                   "eps": 1e-8, "warmup_steps": 0},

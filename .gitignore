@@ -188,3 +188,5 @@ settings.json
 credentials.json
 secrets.json
 .local
+# Local corpus data
+sample_corpus.txt
